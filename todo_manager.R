@@ -1,299 +1,196 @@
-#!/usr/bin/env Rscript
+# R To-Do List Manager - Batch input mode for Rscript
+# Usage: echo -e "list\nquit" | Rscript todo_manager.R
 
-# Command-Line To-Do List Manager in R
-# Author: Christopher Edeson Effiong
-# Course: CSE 310 - Applied Programming
-# Module: R Language
-
-# Create an empty tasks data frame with the proper structure.
 initialize_tasks <- function() {
-  # Initialize empty data frame with columns: id, title, priority, completed
-  tasks_df <- data.frame(
+  data.frame(
     id = integer(),
     title = character(),
     priority = integer(),
     completed = logical(),
     stringsAsFactors = FALSE
   )
-  return(tasks_df)
 }
 
-# Create a new task with the given title and priority level.
-create_task <- function(id, title, priority) {
-  # Ensure priority is between 1 and 5
-  priority <- max(1, min(5, priority))
-  
-  # Create a single-row data frame for the new task
+add_task <- function(tasks_df, title, priority) {
+  new_id <- if (nrow(tasks_df) == 0) 1 else max(tasks_df$id) + 1
   new_task <- data.frame(
-    id = id,
-    title = title,
-    priority = priority,
-    completed = FALSE,
+    id = new_id, title = title, priority = priority, completed = FALSE,
     stringsAsFactors = FALSE
   )
-  return(new_task)
+  result_df <- rbind(tasks_df, new_task)
+  cat(sprintf("Task added (ID: %d)\n", new_id))
+  return(result_df)
 }
 
-# Add a new task to the tasks data frame.
-add_task <- function(tasks_df, title, priority) {
-  # Generate new ID based on current max ID
-  if (nrow(tasks_df) == 0) {
-    new_id <- 1
-  } else {
-    new_id <- max(tasks_df$id) + 1
-  }
-  
-  # Create and append the new task
-  new_task <- create_task(new_id, title, priority)
-  tasks_df <- rbind(tasks_df, new_task)
-  
-  cat("✓ Task added successfully!\n")
-  return(tasks_df)
-}
-
-# Display all tasks in a formatted table.
 display_tasks <- function(tasks_df) {
   if (nrow(tasks_df) == 0) {
-    cat("No tasks yet. Add one to get started!\n")
-    return()
+    cat("No tasks.\n\n")
+    return(invisible(NULL))
   }
-  
-  cat("\n")
-  cat(sprintf("%-4s %-35s %-8s %-12s\n", "ID", "Task", "Priority", "Status"))
-  cat(paste(rep("-", 65), collapse = ""), "\n")
-  
-  # Iterate through each row and display formatted output
+  cat("\nTasks:\n")
+  cat(sprintf("%3s %30s %s %s\n", "ID", "Title", "Pri", "Status"))
+  cat(strrep("-", 50), "\n")
   for (i in 1:nrow(tasks_df)) {
-    task <- tasks_df[i, ]
-    status <- if (task$completed) "✓ Complete" else "Pending"
-    cat(sprintf("%-4d %-35s %-8d %-12s\n", 
-                task$id, 
-                task$title, 
-                task$priority, 
-                status))
+    t <- tasks_df[i, ]
+    st <- if (t$completed) "Done" else "Todo"
+    tl <- if (nchar(t$title) > 28) substr(t$title, 1, 25) %+% "..." else t$title
+    cat(sprintf("%3d %30s %3d %s\n", t$id, tl, t$priority, st))
   }
-  
-  cat("\n")
+  cat(strrep("-", 50), "\n\n")
+  invisible(NULL)
 }
 
-# Mark a task as complete by its ID.
 mark_complete <- function(tasks_df, id) {
-  # Find the row with matching ID
-  idx <- which(tasks_df$id == id)
-  
-  if (length(idx) == 0) {
-    cat(sprintf("Error: Task with ID %d not found.\n", id))
+  if (!(id %in% tasks_df$id)) {
+    cat(sprintf("Task %d not found\n", id))
     return(tasks_df)
   }
-  
-  # Update the completed status
+  idx <- which(tasks_df$id == id)
   tasks_df[idx, "completed"] <- TRUE
-  cat("✓ Task marked as complete!\n")
+  cat(sprintf("Task %d done\n", id))
   return(tasks_df)
 }
 
-# Delete a task by its ID.
 delete_task <- function(tasks_df, id) {
-  # Find the row with matching ID
-  idx <- which(tasks_df$id == id)
-  
-  if (length(idx) == 0) {
-    cat(sprintf("Error: Task with ID %d not found.\n", id))
+  if (!(id %in% tasks_df$id)) {
+    cat(sprintf("Task %d not found\n", id))
     return(tasks_df)
   }
-  
-  # Remove the row by keeping all rows except the one to delete
-  tasks_df <- tasks_df[-idx, ]
-  cat("✓ Task deleted successfully!\n")
+  tasks_df <- tasks_df[-which(tasks_df$id == id), ]
+  cat(sprintf("Task %d deleted\n", id))
   return(tasks_df)
 }
 
-# Filter and display tasks by priority level.
 filter_by_priority <- function(tasks_df, priority) {
-  # Subset data frame to only rows with matching priority
+  if (!(priority %in% 1:5)) {
+    cat("Priority 1-5\n")
+    return(invisible(NULL))
+  }
   filtered_df <- tasks_df[tasks_df$priority == priority, ]
-  
   if (nrow(filtered_df) == 0) {
-    cat(sprintf("No tasks with priority %d.\n", priority))
-    return()
+    cat(sprintf("No tasks priority %d\n\n", priority))
+    return(invisible(NULL))
   }
-  
-  cat(sprintf("\nTasks with Priority %d:\n", priority))
-  cat(sprintf("%-4s %-35s %-8s %-12s\n", "ID", "Task", "Priority", "Status"))
-  cat(paste(rep("-", 65), collapse = ""), "\n")
-  
+  cat(sprintf("\nPriority %d:\n", priority))
+  cat(sprintf("%3s %30s %s\n", "ID", "Title", "Status"))
+  cat(strrep("-", 40), "\n")
   for (i in 1:nrow(filtered_df)) {
-    task <- filtered_df[i, ]
-    status <- if (task$completed) "✓ Complete" else "Pending"
-    cat(sprintf("%-4d %-35s %-8d %-12s\n", 
-                task$id, 
-                task$title, 
-                task$priority, 
-                status))
+    t <- filtered_df[i, ]
+    st <- if (t$completed) "Done" else "Todo"
+    cat(sprintf("%3d %30s %s\n", t$id, t$title, st))
   }
-  
-  cat("\n")
+  cat(strrep("-", 40), "\n\n")
+  invisible(NULL)
 }
 
-# Save tasks to a CSV file.
 save_tasks <- function(tasks_df, filename = "tasks.csv") {
   tryCatch({
     write.csv(tasks_df, file = filename, row.names = FALSE)
-    cat(sprintf("✓ Tasks saved to %s\n", filename))
+    cat(sprintf("Saved %d tasks\n", nrow(tasks_df)))
   }, error = function(e) {
-    cat(sprintf("Error saving tasks: %s\n", e$message))
+    cat(sprintf("Save error: %s\n", e$message))
   })
 }
 
-# Load tasks from a CSV file.
 load_tasks <- function(filename = "tasks.csv") {
-  # Check if file exists
   if (!file.exists(filename)) {
-    cat(sprintf("No previous task file found. Starting fresh.\n"))
     return(initialize_tasks())
   }
-  
-  # Read the CSV file
   tryCatch({
-    tasks_df <- read.csv(filename, stringsAsFactors = FALSE)
-    
-    # Handle empty file
-    if (nrow(tasks_df) == 0) {
-      return(initialize_tasks())
-    }
-    
-    # Ensure column types are correct
-    tasks_df$id <- as.integer(tasks_df$id)
-    tasks_df$title <- as.character(tasks_df$title)
-    tasks_df$priority <- as.integer(tasks_df$priority)
-    tasks_df$completed <- as.logical(tasks_df$completed)
-    
-    return(tasks_df)
+    df <- read.csv(filename, stringsAsFactors = FALSE)
+    if (nrow(df) == 0) return(initialize_tasks())
+    df$id <- as.integer(df$id)
+    df$priority <- as.integer(df$priority)
+    df$completed <- as.logical(df$completed)
+    cat(sprintf("Loaded %d tasks\n", nrow(df)))
+    return(df)
   }, error = function(e) {
-    cat(sprintf("Error loading tasks: %s\n", e$message))
+    cat(sprintf("Load error: %s\n", e$message))
     return(initialize_tasks())
   })
 }
 
-# Main menu loop.
+print_help <- function() {
+  cat("\nCommands:\n")
+  cat("  list              Display tasks\n")
+  cat("  add <title> <pri> Add task (pri: 1-5)\n")
+  cat("  complete <id>     Mark done\n")
+  cat("  delete <id>       Remove\n")
+  cat("  filter <pri>      Show by priority\n")
+  cat("  help              This menu\n")
+  cat("  quit              Exit\n\n")
+}
+
 main <- function() {
-  # Load existing tasks from file
+  cat("\n=== R To-Do Manager ===\n\n")
   tasks <- load_tasks("tasks.csv")
   
-  cat("\n")
-  cat("Welcome to R To-Do Manager!\n")
-  cat("Type 'help' for available commands.\n\n")
+  lines <- readLines(con = "stdin", warn = FALSE)
+  i <- 1
   
-  # Main interactive loop
-  while (TRUE) {
-    cat("> ")
-    input <- tolower(trimws(readline()))
+  while (i <= length(lines)) {
+    line <- trimws(tolower(lines[i]))
+    i <- i + 1
+    if (line == "" || substr(line, 1, 1) == "#") next
     
-    # Use switch to handle commands
-    switch(input,
-      "1" = ,
-      "add" = {
-        cat("Task title: ")
-        title <- readline()
-        cat("Priority (1-5): ")
-        priority_input <- readline()
-        
-        tryCatch({
-          priority <- as.integer(priority_input)
-          if (is.na(priority) || priority < 1 || priority > 5) {
-            cat("Invalid priority. Please enter a number between 1 and 5.\n")
-          } else {
-            tasks <- add_task(tasks, title, priority)
-          }
-        }, error = function(e) {
-          cat("Invalid input.\n")
-        })
-      },
-      
-      "2" = ,
-      "list" = {
-        display_tasks(tasks)
-      },
-      
-      "3" = ,
-      "complete" = {
-        cat("Enter task ID to mark complete: ")
-        id_input <- readline()
-        
-        tryCatch({
-          id <- as.integer(id_input)
-          if (is.na(id)) {
-            cat("Invalid ID. Please enter a number.\n")
-          } else {
-            tasks <- mark_complete(tasks, id)
-          }
-        }, error = function(e) {
-          cat("Invalid input.\n")
-        })
-      },
-      
-      "4" = ,
-      "delete" = {
-        cat("Enter task ID to delete: ")
-        id_input <- readline()
-        
-        tryCatch({
-          id <- as.integer(id_input)
-          if (is.na(id)) {
-            cat("Invalid ID. Please enter a number.\n")
-          } else {
-            tasks <- delete_task(tasks, id)
-          }
-        }, error = function(e) {
-          cat("Invalid input.\n")
-        })
-      },
-      
-      "5" = ,
-      "filter" = {
-        cat("Filter by priority (1-5): ")
-        priority_input <- readline()
-        
-        tryCatch({
-          priority <- as.integer(priority_input)
-          if (is.na(priority) || priority < 1 || priority > 5) {
-            cat("Invalid priority. Please enter a number between 1 and 5.\n")
-          } else {
-            filter_by_priority(tasks, priority)
-          }
-        }, error = function(e) {
-          cat("Invalid input.\n")
-        })
-      },
-      
-      "help" = {
-        cat("\nAvailable commands:\n")
-        cat("  1 or 'add'      - Add a new task\n")
-        cat("  2 or 'list'     - Display all tasks\n")
-        cat("  3 or 'complete' - Mark a task as complete\n")
-        cat("  4 or 'delete'   - Delete a task\n")
-        cat("  5 or 'filter'   - Filter tasks by priority\n")
-        cat("  'help'          - Show this help menu\n")
-        cat("  'quit'          - Exit the program\n\n")
-      },
-      
-      "quit" = ,
-      "exit" = {
-        # Save tasks before exiting
-        save_tasks(tasks)
-        cat("Goodbye!\n")
-        break
-      },
-      
-      {
-        # Default case for unknown commands
-        cat("Unknown command. Type 'help' for available commands.\n")
+    parts <- strsplit(line, "[[:space:]]+")[[1]]
+    cmd <- parts[1]
+    
+    if (cmd == "list") {
+      display_tasks(tasks)
+    }
+    else if (cmd == "add") {
+      if (length(parts) >= 3) {
+        title <- parts[2]
+        pri_str <- parts[3]
+        priority <- as.integer(pri_str)
+        if (!is.na(priority) && priority >= 1 && priority <= 5) {
+          tasks <- add_task(tasks, title, priority)
+        } else {
+          cat("Invalid priority\n")
+        }
       }
-    )
+    }
+    else if (cmd == "complete") {
+      if (length(parts) >= 2) {
+        id <- as.integer(parts[2])
+        if (!is.na(id)) {
+          tasks <- mark_complete(tasks, id)
+        }
+      }
+    }
+    else if (cmd == "delete") {
+      if (length(parts) >= 2) {
+        id <- as.integer(parts[2])
+        if (!is.na(id)) {
+          tasks <- delete_task(tasks, id)
+        }
+      }
+    }
+    else if (cmd == "filter") {
+      if (length(parts) >= 2) {
+        pri <- as.integer(parts[2])
+        if (!is.na(pri)) {
+          filter_by_priority(tasks, pri)
+        }
+      }
+    }
+    else if (cmd == "help") {
+      print_help()
+    }
+    else if (cmd == "quit" || cmd == "exit") {
+      save_tasks(tasks)
+      cat("Goodbye!\n")
+      break
+    }
+    else if (cmd != "") {
+      cat(sprintf("Unknown: %s\n", cmd))
+    }
   }
+  
+  invisible(NULL)
 }
 
-# Run the main program
 if (!interactive()) {
   main()
 }
