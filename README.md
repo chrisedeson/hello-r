@@ -1,6 +1,6 @@
 # R To-Do List Manager
 
-A command-line to-do list application written in R that demonstrates core language concepts including data frames, functions, vectorized operations, and file I/O.
+A command-line to-do list application written in R that demonstrates data frames, functions, control flow, and CSV file I/O.
 
 ## Overview
 
@@ -10,9 +10,9 @@ This project is a functional task manager that allows users to:
 - Mark tasks as complete
 - Delete tasks
 - Filter tasks by priority
-- Automatically save/load tasks to/from CSV
+- Automatically save/load tasks to and from CSV
 
-The software demonstrates R's unique approach to data manipulation including data frames, vectorized operations, and functional programming patterns.
+The software demonstrates R data handling using data frames, input parsing, and persistence with base R functions.
 
 ## Development Environment
 
@@ -42,51 +42,56 @@ main()
 ### Example Usage:
 
 ```
-Welcome to R To-Do Manager!
+R To-Do List Manager
 Type 'help' for available commands.
 
 > add
-Task title: Buy groceries
+Task title: Buy groceries for the week
 Priority (1-5): 3
-✓ Task added successfully!
+Task added (ID: 1).
 
 > list
 
-ID   Task                            Priority Status
------------------------------------------------------------------
-1    Buy groceries                   3        Pending
+All tasks
+============================================================================================
+ID   Title                                Priority Status     Created
+--------------------------------------------------------------------------------------------
+1    Buy groceries for the week           3        Pending    2026-04-10 13:42:42
+--------------------------------------------------------------------------------------------
 
 > complete
-Enter task ID to mark complete: 1
-✓ Task marked as complete!
+Task ID to complete: 1
+Task 1 marked complete.
 
 > quit
-✓ Tasks saved to tasks.csv
+Saved 1 task(s) to tasks.csv
 Goodbye!
 ```
 
 ## Code Structure
 
 - `initialize_tasks()`: Creates an empty data frame with the correct structure.
-- `create_task()`: Generates a single task as a data frame row.
-- `add_task()`: Appends a new task to the tasks data frame.
-- `display_tasks()`: Formats and prints all tasks using R's string formatting.
+- `normalize_tasks()`: Validates and normalizes loaded CSV data.
+- `load_tasks()`: Loads tasks from CSV and handles missing/corrupt data.
+- `save_tasks()`: Persists tasks to CSV.
+- `add_task()`: Appends a validated task with a generated ID and timestamp.
+- `print_task_table()`: Renders task tables for list and filter views.
 - `mark_complete()`: Updates a task's completion status.
 - `delete_task()`: Removes a task using data frame subsetting.
-- `filter_by_priority()`: Filters and displays tasks by priority using vectorized subsetting.
-- `save_tasks()`: Serializes the data frame to CSV using `write.csv()`.
-- `load_tasks()`: Deserializes CSV data back into a data frame with error handling.
-- `main()`: Interactive loop that uses `readline()` and `switch()` for command handling.
+- `filter_by_priority()`: Displays only tasks with the requested priority.
+- `parse_int()`: Safely parses numeric command input.
+- `make_input_reader()`: Handles terminal and piped input consistently.
+- `main()`: Command loop that orchestrates user actions.
 
 ## Key Learning Objectives
 
 - **Data Frames**: Core data structure in R for storing tabular data.
-- **Vectorized Operations**: Use subsetting and vectorized functions instead of loops.
+- **Vectorized Operations**: Use subsetting expressions for filtering and updates.
 - **Functions**: Write modular, reusable functions with clear purpose.
 - **File I/O**: Read and write CSV files using base R functions.
-- **Error Handling**: Use `tryCatch()` for robust error management.
-- **String Formatting**: Use `sprintf()` and `paste()` for formatted output.
-- **Control Flow**: Use `switch()` statements and conditional logic.
+- **Error Handling**: Use `tryCatch()` for robust file operations.
+- **String Formatting**: Use `sprintf()` for table-like terminal output.
+- **Control Flow**: Use a loop and conditional command dispatch.
 
 ## Future Enhancements
 
@@ -101,21 +106,14 @@ Goodbye!
 To verify the code runs:
 
 ```bash
-Rscript todo_manager.R << EOF
-help
-quit
-EOF
+printf "help\nquit\n" | Rscript todo_manager.R
 ```
 
 The application creates `tasks.csv` in the same directory to persist tasks across sessions.
 
-## Video Demo
-
-See `video.md` in the week05 folder for a detailed walkthrough of the project, or access the recorded demo at: [Video Link](add-your-link-here)
-
 ## Author
 
-Christopher Edeson Effiong  
+Christopher Edeson
 CSE 310: Applied Programming  
 BYU-Pathway Worldwide
 

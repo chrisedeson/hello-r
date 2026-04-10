@@ -1,5 +1,7 @@
-# R To-Do List Manager - Batch input mode for Rscript
-# Usage: echo -e "list\nquit" | Rscript todo_manager.R
+# R To-Do List Manager
+# A fresh rebuild with CSV persistence and command-driven interaction.
+
+DATA_FILE <- "tasks.csv"
 
 initialize_tasks <- function() {
   data.frame(
@@ -7,188 +9,305 @@ initialize_tasks <- function() {
     title = character(),
     priority = integer(),
     completed = logical(),
+    created_at = character(),
     stringsAsFactors = FALSE
   )
 }
 
-add_task <- function(tasks_df, title, priority) {
-  new_id <- if (nrow(tasks_df) == 0) 1 else max(tasks_df$id) + 1
-  new_task <- data.frame(
-    id = new_id, title = title, priority = priority, completed = FALSE,
-    stringsAsFactors = FALSE
-  )
-  result_df <- rbind(tasks_df, new_task)
-  cat(sprintf("Task added (ID: %d)\n", new_id))
-  return(result_df)
+normalize_tasks <- function(tasks_df) {
+  expected <- c("id", "title", "priority", "completed", "created_at")
+
+  if (!all(expected %in% names(tasks_df))) {
+    return(initialize_tasks())
+  }
+
+  tasks_df <- tasks_df[, expected]
+  tasks_df$id <- as.integer(tasks_df$id)
+  tasks_df$title <- as.character(tasks_df$title)
+  tasks_df$priority <- as.integer(tasks_df$priority)
+  tasks_df$completed <- as.logical(tasks_df$completed)
+  tasks_df$created_at <- as.character(tasks_df$created_at)
+
+  tasks_df
 }
 
-display_tasks <- function(tasks_df) {
-  if (nrow(tasks_df) == 0) {
-    cat("No tasks.\n\n")
-    return(invisible(NULL))
+load_tasks <- function(filename = DATA_FILE) {
+  if (!file.exists(filename)) {
+    return(initialize_tasks())
   }
-  cat("\nTasks:\n")
-  cat(sprintf("%3s %30s %s %s\n", "ID", "Title", "Pri", "Status"))
-  cat(strrep("-", 50), "\n")
-  for (i in 1:nrow(tasks_df)) {
-    t <- tasks_df[i, ]
-    st <- if (t$completed) "Done" else "Todo"
-    tl <- if (nchar(t$title) > 28) substr(t$title, 1, 25) %+% "..." else t$title
-    cat(sprintf("%3d %30s %3d %s\n", t$id, tl, t$priority, st))
-  }
-  cat(strrep("-", 50), "\n\n")
-  invisible(NULL)
+
+  tryCatch({
+    tasks_df <- read.csv(filename, stringsAsFactors = FALSE)
+    if (nrow(tasks_df) == 0) {
+      return(initialize_tasks())
+    }
+    normalize_tasks(tasks_df)
+  }, error = function(e) {
+    cat(sprintf("Load error: %s\n", e$message))
+    initialize_tasks()
+  })
 }
 
-mark_complete <- function(tasks_df, id) {
-  if (!(id %in% tasks_df$id)) {
-    cat(sprintf("Task %d not found\n", id))
-    return(tasks_df)
-  }
-  idx <- which(tasks_df$id == id)
-  tasks_df[idx, "completed"] <- TRUE
-  cat(sprintf("Task %d done\n", id))
-  return(tasks_df)
-}
-
-delete_task <- function(tasks_df, id) {
-  if (!(id %in% tasks_df$id)) {
-    cat(sprintf("Task %d not found\n", id))
-    return(tasks_df)
-  }
-  tasks_df <- tasks_df[-which(tasks_df$id == id), ]
-  cat(sprintf("Task %d deleted\n", id))
-  return(tasks_df)
-}
-
-filter_by_priority <- function(tasks_df, priority) {
-  if (!(priority %in% 1:5)) {
-    cat("Priority 1-5\n")
-    return(invisible(NULL))
-  }
-  filtered_df <- tasks_df[tasks_df$priority == priority, ]
-  if (nrow(filtered_df) == 0) {
-    cat(sprintf("No tasks priority %d\n\n", priority))
-    return(invisible(NULL))
-  }
-  cat(sprintf("\nPriority %d:\n", priority))
-  cat(sprintf("%3s %30s %s\n", "ID", "Title", "Status"))
-  cat(strrep("-", 40), "\n")
-  for (i in 1:nrow(filtered_df)) {
-    t <- filtered_df[i, ]
-    st <- if (t$completed) "Done" else "Todo"
-    cat(sprintf("%3d %30s %s\n", t$id, t$title, st))
-  }
-  cat(strrep("-", 40), "\n\n")
-  invisible(NULL)
-}
-
-save_tasks <- function(tasks_df, filename = "tasks.csv") {
+save_tasks <- function(tasks_df, filename = DATA_FILE) {
   tryCatch({
     write.csv(tasks_df, file = filename, row.names = FALSE)
-    cat(sprintf("Saved %d tasks\n", nrow(tasks_df)))
+    cat(sprintf("Saved %d task(s) to %s\n", nrow(tasks_df), filename))
   }, error = function(e) {
     cat(sprintf("Save error: %s\n", e$message))
   })
 }
 
-load_tasks <- function(filename = "tasks.csv") {
-  if (!file.exists(filename)) {
-    return(initialize_tasks())
+next_task_id <- function(tasks_df) {
+  if (nrow(tasks_df) == 0) {
+    return(1L)
   }
-  tryCatch({
-    df <- read.csv(filename, stringsAsFactors = FALSE)
-    if (nrow(df) == 0) return(initialize_tasks())
-    df$id <- as.integer(df$id)
-    df$priority <- as.integer(df$priority)
-    df$completed <- as.logical(df$completed)
-    cat(sprintf("Loaded %d tasks\n", nrow(df)))
-    return(df)
-  }, error = function(e) {
-    cat(sprintf("Load error: %s\n", e$message))
-    return(initialize_tasks())
-  })
+  as.integer(max(tasks_df$id, na.rm = TRUE) + 1)
+}
+
+print_task_table <- function(tasks_df, heading = "Tasks") {
+  if (nrow(tasks_df) == 0) {
+    cat(sprintf("%s: no tasks found.\n\n", heading))
+    return(invisible(NULL))
+  }
+
+  cat(sprintf("\n%s\n", heading))
+  cat(strrep("=", 92), "\n")
+  cat(sprintf("%-4s %-36s %-8s %-10s %-20s\n", "ID", "Title", "Priority", "Status", "Created"))
+  cat(strrep("-", 92), "\n")
+
+  for (i in seq_len(nrow(tasks_df))) {
+    task <- tasks_df[i, ]
+    status <- if (isTRUE(task$completed)) "Done" else "Pending"
+    title <- task$title
+    if (nchar(title) > 35) {
+      title <- paste0(substr(title, 1, 32), "...")
+    }
+
+    cat(sprintf(
+      "%-4d %-36s %-8d %-10s %-20s\n",
+      task$id,
+      title,
+      task$priority,
+      status,
+      task$created_at
+    ))
+  }
+
+  cat(strrep("-", 92), "\n\n")
+  invisible(NULL)
+}
+
+add_task <- function(tasks_df, title, priority) {
+  title <- trimws(title)
+  if (title == "") {
+    cat("Task title cannot be empty.\n")
+    return(tasks_df)
+  }
+
+  if (is.na(priority) || !(priority %in% 1:5)) {
+    cat("Priority must be an integer between 1 and 5.\n")
+    return(tasks_df)
+  }
+
+  new_row <- data.frame(
+    id = next_task_id(tasks_df),
+    title = title,
+    priority = as.integer(priority),
+    completed = FALSE,
+    created_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    stringsAsFactors = FALSE
+  )
+
+  tasks_df <- rbind(tasks_df, new_row)
+  cat(sprintf("Task added (ID: %d).\n", new_row$id))
+  tasks_df
+}
+
+mark_complete <- function(tasks_df, id) {
+  if (is.na(id)) {
+    cat("Please provide a valid task ID.\n")
+    return(tasks_df)
+  }
+
+  idx <- which(tasks_df$id == id)
+  if (length(idx) == 0) {
+    cat(sprintf("Task ID %d not found.\n", id))
+    return(tasks_df)
+  }
+
+  tasks_df[idx, "completed"] <- TRUE
+  cat(sprintf("Task %d marked complete.\n", id))
+  tasks_df
+}
+
+delete_task <- function(tasks_df, id) {
+  if (is.na(id)) {
+    cat("Please provide a valid task ID.\n")
+    return(tasks_df)
+  }
+
+  idx <- which(tasks_df$id == id)
+  if (length(idx) == 0) {
+    cat(sprintf("Task ID %d not found.\n", id))
+    return(tasks_df)
+  }
+
+  tasks_df <- tasks_df[-idx, , drop = FALSE]
+  cat(sprintf("Task %d deleted.\n", id))
+  tasks_df
+}
+
+filter_by_priority <- function(tasks_df, priority) {
+  if (is.na(priority) || !(priority %in% 1:5)) {
+    cat("Priority must be an integer between 1 and 5.\n")
+    return(invisible(NULL))
+  }
+
+  filtered <- tasks_df[tasks_df$priority == priority, , drop = FALSE]
+  print_task_table(filtered, sprintf("Tasks with priority %d", priority))
+}
+
+parse_int <- function(value) {
+  value <- trimws(value)
+  if (value == "") {
+    return(NA_integer_)
+  }
+
+  parsed <- suppressWarnings(as.integer(value))
+  if (is.na(parsed)) {
+    return(NA_integer_)
+  }
+  parsed
+}
+
+make_input_reader <- function(tty_mode) {
+  if (tty_mode) {
+    return(function(prompt) {
+      readline(prompt = prompt)
+    })
+  }
+
+  buffered_lines <- readLines(file("stdin"), warn = FALSE)
+  position <- 1L
+
+  function(prompt) {
+    cat(prompt)
+    flush.console()
+
+    if (position > length(buffered_lines)) {
+      return(NA_character_)
+    }
+
+    line <- buffered_lines[[position]]
+    position <<- position + 1L
+    line
+  }
 }
 
 print_help <- function() {
-  cat("\nCommands:\n")
-  cat("  list              Display tasks\n")
-  cat("  add <title> <pri> Add task (pri: 1-5)\n")
-  cat("  complete <id>     Mark done\n")
-  cat("  delete <id>       Remove\n")
-  cat("  filter <pri>      Show by priority\n")
-  cat("  help              This menu\n")
-  cat("  quit              Exit\n\n")
+  cat("\nAvailable commands\n")
+  cat("  1 or add       Add a task\n")
+  cat("  2 or list      Show all tasks\n")
+  cat("  3 or complete  Mark task complete\n")
+  cat("  4 or delete    Delete a task\n")
+  cat("  5 or filter    Show tasks by priority\n")
+  cat("  help           Show help\n")
+  cat("  quit or exit   Save and close\n\n")
 }
 
 main <- function() {
-  cat("\n=== R To-Do Manager ===\n\n")
-  tasks <- load_tasks("tasks.csv")
-  
-  lines <- readLines(con = "stdin", warn = FALSE)
-  i <- 1
-  
-  while (i <= length(lines)) {
-    line <- trimws(tolower(lines[i]))
-    i <- i + 1
-    if (line == "" || substr(line, 1, 1) == "#") next
-    
-    parts <- strsplit(line, "[[:space:]]+")[[1]]
-    cmd <- parts[1]
-    
-    if (cmd == "list") {
-      display_tasks(tasks)
-    }
-    else if (cmd == "add") {
-      if (length(parts) >= 3) {
-        title <- parts[2]
-        pri_str <- parts[3]
-        priority <- as.integer(pri_str)
-        if (!is.na(priority) && priority >= 1 && priority <= 5) {
-          tasks <- add_task(tasks, title, priority)
-        } else {
-          cat("Invalid priority\n")
-        }
-      }
-    }
-    else if (cmd == "complete") {
-      if (length(parts) >= 2) {
-        id <- as.integer(parts[2])
-        if (!is.na(id)) {
-          tasks <- mark_complete(tasks, id)
-        }
-      }
-    }
-    else if (cmd == "delete") {
-      if (length(parts) >= 2) {
-        id <- as.integer(parts[2])
-        if (!is.na(id)) {
-          tasks <- delete_task(tasks, id)
-        }
-      }
-    }
-    else if (cmd == "filter") {
-      if (length(parts) >= 2) {
-        pri <- as.integer(parts[2])
-        if (!is.na(pri)) {
-          filter_by_priority(tasks, pri)
-        }
-      }
-    }
-    else if (cmd == "help") {
-      print_help()
-    }
-    else if (cmd == "quit" || cmd == "exit") {
-      save_tasks(tasks)
+  tty_mode <- isatty(stdin())
+  read_input <- make_input_reader(tty_mode)
+  tasks <- load_tasks(DATA_FILE)
+
+  cat("\nR To-Do List Manager\n")
+  cat("Type 'help' for available commands.\n\n")
+
+  repeat {
+    cmd_raw <- read_input("> ")
+
+    if (is.na(cmd_raw)) {
+      save_tasks(tasks, DATA_FILE)
       cat("Goodbye!\n")
       break
     }
-    else if (cmd != "") {
-      cat(sprintf("Unknown: %s\n", cmd))
+
+    cmd <- tolower(trimws(cmd_raw))
+    if (cmd == "") {
+      next
     }
+
+    if (cmd %in% c("1", "add")) {
+      title <- read_input("Task title: ")
+      if (is.na(title)) {
+        save_tasks(tasks, DATA_FILE)
+        cat("Goodbye!\n")
+        break
+      }
+
+      priority_text <- read_input("Priority (1-5): ")
+      if (is.na(priority_text)) {
+        save_tasks(tasks, DATA_FILE)
+        cat("Goodbye!\n")
+        break
+      }
+
+      tasks <- add_task(tasks, title, parse_int(priority_text))
+      next
+    }
+
+    if (cmd %in% c("2", "list")) {
+      ordered <- tasks[order(tasks$completed, tasks$priority, tasks$id), , drop = FALSE]
+      print_task_table(ordered, "All tasks")
+      next
+    }
+
+    if (cmd %in% c("3", "complete")) {
+      id_text <- read_input("Task ID to complete: ")
+      if (is.na(id_text)) {
+        save_tasks(tasks, DATA_FILE)
+        cat("Goodbye!\n")
+        break
+      }
+      tasks <- mark_complete(tasks, parse_int(id_text))
+      next
+    }
+
+    if (cmd %in% c("4", "delete")) {
+      id_text <- read_input("Task ID to delete: ")
+      if (is.na(id_text)) {
+        save_tasks(tasks, DATA_FILE)
+        cat("Goodbye!\n")
+        break
+      }
+      tasks <- delete_task(tasks, parse_int(id_text))
+      next
+    }
+
+    if (cmd %in% c("5", "filter")) {
+      priority_text <- read_input("Priority to filter (1-5): ")
+      if (is.na(priority_text)) {
+        save_tasks(tasks, DATA_FILE)
+        cat("Goodbye!\n")
+        break
+      }
+      filter_by_priority(tasks, parse_int(priority_text))
+      next
+    }
+
+    if (cmd == "help") {
+      print_help()
+      next
+    }
+
+    if (cmd %in% c("quit", "exit")) {
+      save_tasks(tasks, DATA_FILE)
+      cat("Goodbye!\n")
+      break
+    }
+
+    cat("Unknown command. Type 'help' for available commands.\n")
   }
-  
-  invisible(NULL)
 }
 
 if (!interactive()) {
