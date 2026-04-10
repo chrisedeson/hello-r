@@ -1,0 +1,7 @@
+source("todo_manager.R")
+cat("✓ R script loaded successfully!\n")
+tasks <- initialize_tasks()
+cat(sprintf("✓ Created empty task data frame with %d rows\n", nrow(tasks)))
+tasks <- add_task(tasks, "Buy groceries", 3)
+cat(sprintf("✓ Added task - now have %d total tasks\n", nrow(tasks)))
+display_tasks(tasks)
