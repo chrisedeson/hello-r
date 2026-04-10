@@ -180,27 +180,26 @@ parse_int <- function(value) {
   parsed
 }
 
-make_input_reader <- function(tty_mode) {
-  if (tty_mode) {
-    return(function(prompt) {
-      readline(prompt = prompt)
-    })
-  }
-
-  buffered_lines <- readLines(file("stdin"), warn = FALSE)
-  position <- 1L
-
+make_input_reader <- function() {
   function(prompt) {
+    # If in RStudio or an interactive R console
+    if (interactive()) {
+      return(readline(prompt = prompt))
+    } 
+    
+    # If running via command line (Rscript)
     cat(prompt)
     flush.console()
-
-    if (position > length(buffered_lines)) {
+    
+    # Read exactly one line from standard input
+    line <- readLines(file("stdin"), n = 1, warn = FALSE)
+    
+    # If length is 0, we hit EOF (e.g., Ctrl+D or end of piped file)
+    if (length(line) == 0) {
       return(NA_character_)
     }
-
-    line <- buffered_lines[[position]]
-    position <<- position + 1L
-    line
+    
+    return(line)
   }
 }
 
@@ -216,8 +215,7 @@ print_help <- function() {
 }
 
 main <- function() {
-  tty_mode <- isatty(stdin())
-  read_input <- make_input_reader(tty_mode)
+  read_input <- make_input_reader()
   tasks <- load_tasks(DATA_FILE)
 
   cat("\nR To-Do List Manager\n")
@@ -228,7 +226,7 @@ main <- function() {
 
     if (is.na(cmd_raw)) {
       save_tasks(tasks, DATA_FILE)
-      cat("Goodbye!\n")
+      cat("\nGoodbye!\n")
       break
     }
 
@@ -241,14 +239,14 @@ main <- function() {
       title <- read_input("Task title: ")
       if (is.na(title)) {
         save_tasks(tasks, DATA_FILE)
-        cat("Goodbye!\n")
+        cat("\nGoodbye!\n")
         break
       }
 
       priority_text <- read_input("Priority (1-5): ")
       if (is.na(priority_text)) {
         save_tasks(tasks, DATA_FILE)
-        cat("Goodbye!\n")
+        cat("\nGoodbye!\n")
         break
       }
 
@@ -266,7 +264,7 @@ main <- function() {
       id_text <- read_input("Task ID to complete: ")
       if (is.na(id_text)) {
         save_tasks(tasks, DATA_FILE)
-        cat("Goodbye!\n")
+        cat("\nGoodbye!\n")
         break
       }
       tasks <- mark_complete(tasks, parse_int(id_text))
@@ -277,7 +275,7 @@ main <- function() {
       id_text <- read_input("Task ID to delete: ")
       if (is.na(id_text)) {
         save_tasks(tasks, DATA_FILE)
-        cat("Goodbye!\n")
+        cat("\nGoodbye!\n")
         break
       }
       tasks <- delete_task(tasks, parse_int(id_text))
@@ -288,7 +286,7 @@ main <- function() {
       priority_text <- read_input("Priority to filter (1-5): ")
       if (is.na(priority_text)) {
         save_tasks(tasks, DATA_FILE)
-        cat("Goodbye!\n")
+        cat("\nGoodbye!\n")
         break
       }
       filter_by_priority(tasks, parse_int(priority_text))
@@ -310,6 +308,5 @@ main <- function() {
   }
 }
 
-if (!interactive()) {
-  main()
-}
+# Run the program directly
+main()
